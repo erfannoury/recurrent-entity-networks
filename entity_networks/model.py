@@ -2,10 +2,10 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 
+from functools import partial
+
 import numpy as np
 import tensorflow as tf
-
-from functools import partial
 
 from entity_networks.activations import prelu
 from entity_networks.dynamic_memory_cell import DynamicMemoryCell
@@ -93,7 +93,7 @@ def get_input_encoding(embedding, initializer=None, scope=None):
     with tf.variable_scope(scope, 'Encoding', initializer=initializer):
         _, _, max_sentence_length, _ = embedding.get_shape().as_list()
         positional_mask = tf.get_variable('positional_mask', [max_sentence_length, 1])
-        encoded_input = tf.reduce_sum(embedding * positional_mask, reduction_indices=[2])
+        encoded_input = tf.reduce_sum(embedding * positional_mask, axis=2)
         return encoded_input
 
 def get_output(last_state, encoded_query, num_blocks, vocab_size,
@@ -105,32 +105,32 @@ def get_output(last_state, encoded_query, num_blocks, vocab_size,
     [End-To-End Memory Networks](https://arxiv.org/abs/1502.01852).
     """
     with tf.variable_scope(scope, 'Output', initializer=initializer):
-        last_state = tf.pack(tf.split(1, num_blocks, last_state), axis=1)
+        last_state = tf.stack(tf.split(last_state, num_blocks, 1), 1)
         _, _, embedding_size = last_state.get_shape().as_list()
 
         # Use the encoded_query to attend over memories (hidden states of dynamic last_state cell blocks)
-        attention = tf.reduce_sum(last_state * encoded_query, reduction_indices=[2])
+        attention = tf.reduce_sum(last_state * encoded_query, axis=2)
 
         # Subtract max for numerical stability (softmax is shift invariant)
-        attention_max = tf.reduce_max(attention, reduction_indices=[-1], keep_dims=True)
+        attention_max = tf.reduce_max(attention, axis=-1, keep_dims=True)
         attention = tf.nn.softmax(attention - attention_max)
         attention = tf.expand_dims(attention, 2)
 
         # Weight memories by attention vectors
-        u = tf.reduce_sum(last_state * attention, reduction_indices=[1])
+        u = tf.reduce_sum(last_state * attention, axis=1)
 
         # R acts as the decoder matrix to convert from internal state to the output vocabulary size
         R = tf.get_variable('R', [embedding_size, vocab_size])
         H = tf.get_variable('H', [embedding_size, embedding_size])
 
-        q = tf.squeeze(encoded_query, squeeze_dims=[1])
+        q = tf.squeeze(encoded_query, axis=1)
         y = tf.matmul(activation(q + tf.matmul(u, H)), R)
         return y
 
 def get_loss(output, labels, mode):
     if mode == tf.contrib.learn.ModeKeys.INFER:
         return None
-    return tf.contrib.losses.sparse_softmax_cross_entropy(output, labels)
+    return tf.losses.sparse_softmax_cross_entropy(labels, output)
 
 def get_train_op(loss, params, mode):
     if mode != tf.contrib.learn.ModeKeys.TRAIN:
@@ -145,9 +145,9 @@ def get_train_op(loss, params, mode):
 
     learning_rate = tf.train.exponential_decay(
         learning_rate=learning_rate_init,
+        global_step=global_step,
         decay_steps=learning_rate_decay_steps,
         decay_rate=learning_rate_decay_rate,
-        global_step=global_step,
         staircase=True)
 
     tf.contrib.layers.summarize_tensor(learning_rate, tag='learning_rate')

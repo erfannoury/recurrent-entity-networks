@@ -63,7 +63,7 @@ def main(_):
     ]
 
     eval_metrics = {
-        "accuracy": tf.contrib.learn.metric_spec.MetricSpec(tf.contrib.metrics.streaming_accuracy)
+        "accuracy": tf.contrib.learn.MetricSpec(tf.contrib.metrics.streaming_accuracy)
     }
 
     config = tf.contrib.learn.RunConfig(
@@ -91,7 +91,7 @@ def main(_):
         eval_steps=None,
         eval_metrics=eval_metrics,
         train_monitors=train_monitors,
-        local_eval_frequency=1)
+        min_eval_frequency=1)
 
     experiment.train_and_evaluate()
 

@@ -44,7 +44,7 @@ def main(_):
         log_device_placement=True)
 
     eval_metrics = {
-        "accuracy": tf.contrib.learn.metric_spec.MetricSpec(tf.contrib.metrics.streaming_accuracy)
+        "accuracy": tf.contrib.learn.MetricSpec(tf.contrib.metrics.streaming_accuracy)
     }
 
     estimator = tf.contrib.learn.Estimator(

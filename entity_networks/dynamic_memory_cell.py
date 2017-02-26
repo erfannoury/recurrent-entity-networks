@@ -5,7 +5,7 @@ from __future__ import division
 import numpy as np
 import tensorflow as tf
 
-class DynamicMemoryCell(tf.nn.rnn_cell.RNNCell):
+class DynamicMemoryCell(tf.contrib.rnn.RNNCell):
     """
     Implementation of a dynamic memory cell as a gated recurrent network.
     The cell's hidden state is divided into blocks and each block's weights are tied.
@@ -30,8 +30,8 @@ class DynamicMemoryCell(tf.nn.rnn_cell.RNNCell):
         """
         We initialize the memory to the key values.
         """
-        zero_state = tf.concat(1, [tf.expand_dims(key, 0) for key in self._keys])
-        zero_state_batch = tf.tile(zero_state, tf.pack([batch_size, 1]))
+        zero_state = tf.concat([tf.expand_dims(key, 0) for key in self._keys], 1)
+        zero_state_batch = tf.tile(zero_state, tf.stack([batch_size, 1]))
         return zero_state_batch
 
     def get_gate(self, state_j, key_j, inputs):
@@ -40,9 +40,9 @@ class DynamicMemoryCell(tf.nn.rnn_cell.RNNCell):
 
         g_j <- \sigma(s_t^T h_j + s_t^T w_j)
         """
-        a = tf.reduce_sum(inputs * state_j, reduction_indices=[1])
-        b = tf.reduce_sum(inputs * tf.expand_dims(key_j, 0), reduction_indices=[1])
-        return tf.sigmoid(a + b)
+        a = tf.reduce_sum(inputs * state_j, axis=1)
+        b = tf.reduce_sum(inputs * tf.expand_dims(key_j, 0), axis=1)
+        return tf.nn.sigmoid(a + b)
 
     def get_candidate(self, state_j, key_j, inputs, U, V, W):
         """
@@ -59,7 +59,7 @@ class DynamicMemoryCell(tf.nn.rnn_cell.RNNCell):
     def __call__(self, inputs, state, scope=None):
         with tf.variable_scope(scope or type(self).__name__, initializer=self._initializer):
             # Split the hidden state into blocks (each U, V, W are shared across blocks).
-            state = tf.split(1, self._num_blocks, state)
+            state = tf.split(state, self._num_blocks, 1)
 
             # TODO: ortho init?
             U = tf.get_variable('U', [self._num_units_per_block, self._num_units_per_block])
@@ -83,5 +83,5 @@ class DynamicMemoryCell(tf.nn.rnn_cell.RNNCell):
                 state_j_next = tf.nn.l2_normalize(state_j_next, -1, epsilon=1e-7) # TODO: Is epsilon necessary?
 
                 next_states.append(state_j_next)
-            state_next = tf.concat(1, next_states)
+            state_next = tf.concat(next_states, 1)
         return state_next, state_next
