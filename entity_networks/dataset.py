@@ -26,7 +26,19 @@ class Dataset(object):
 
     @property
     def steps_per_epoch(self):
-        return self.batch_size * self.examples_per_epoch
+        # It should return the number of mini-batches in a single epoch. And it
+        # depends on whether the last batch will be smaller than the rest or not.
+        # In the implementation of the `read_batch_record_features` function, if
+        # the `num_epochs` argument is `None` (and therefore it will serve
+        # mini-batches indefinitely), a smaller final mini-batch is not allowed.
+        # However, when the number of epochs is limited, the final mini-batch can
+        # be smaller than other mini-batches. Given that in this repo training
+        # doesn't go for an indefinite number of epochs, therefore it is assumed
+        # that the last mini-batch can be smaller than the previous ones.
+        if self.examples_per_epoch % self.batch_size:
+            return self.examples_per_epoch // self.batch_size
+        else:
+            return self.examples_per_epoch // self.batch_size + 1
 
     def get_input_fn(self, name, num_epochs, shuffle):
         def input_fn():
